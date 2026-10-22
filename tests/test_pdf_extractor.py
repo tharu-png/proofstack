@@ -3,7 +3,8 @@ import fitz
 import pytest
 
 from app.services.pdf_extractor import extract_pdf_pages
-
+from fastapi.testclient import TestClient
+from app.main import app
 
 def create_test_pdf() -> bytes:
     document = fitz.open()
@@ -35,3 +36,65 @@ def test_extracts_text_and_preserves_page_numbers():
 def test_rejects_invalid_pdf():
     with pytest.raises(ValueError, match="valid PDF"):
         extract_pdf_pages(b"this is not a PDF")
+
+
+def test_upload_pdf_endpoint():
+    pdf_bytes = create_test_pdf()
+    client = TestClient(app)
+
+    response = client.post(
+        "/documents/extract",
+        files={
+            "file": (
+                "evidence.pdf",
+                pdf_bytes,
+                "application/pdf",
+            )
+        },
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["filename"] == "evidence.pdf"
+    assert data["page_count"] == 2
+    assert len(data["pages"]) == 2
+    assert data["pages"][0]["page_number"] == 1
+    assert "page one" in data["pages"][0]["text"]
+
+
+def test_rejects_non_pdf_upload():
+    client = TestClient(app)
+
+    response = client.post(
+        "/documents/extract",
+        files={
+            "file": (
+                "notes.txt",
+                b"This is not a PDF.",
+                "text/plain",
+            )
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Only PDF files are supported."
+
+
+def test_rejects_invalid_pdf_upload():
+    client = TestClient(app)
+
+    response = client.post(
+        "/documents/extract",
+        files={
+            "file": (
+                "broken.pdf",
+                b"This is not a valid PDF.",
+                "application/pdf",
+            )
+        },
+    )
+
+    assert response.status_code == 400
+    assert "valid PDF" in response.json()["detail"]
