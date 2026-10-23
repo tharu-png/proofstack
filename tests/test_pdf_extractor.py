@@ -6,6 +6,9 @@ from app.services.pdf_extractor import extract_pdf_pages
 from fastapi.testclient import TestClient
 from app.main import app
 
+from pathlib import Path
+from app.services.document_storage import UPLOAD_DIR
+
 def create_test_pdf() -> bytes:
     document = fitz.open()
 
@@ -115,3 +118,28 @@ def test_rejects_empty_pdf_upload():
 
     assert response.status_code == 400
     assert response.json()["detail"] == "The uploaded PDF file is empty."
+
+
+def test_upload_pdf_saves_original_file():
+    pdf_bytes = create_test_pdf()
+    client = TestClient(app)
+
+    response = client.post(
+        "/documents/extract",
+        files={
+            "file": (
+                "storage_test.pdf",
+                pdf_bytes,
+                "application/pdf",
+            )
+        },
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+    stored_filename = data["stored_filename"]
+    stored_path = UPLOAD_DIR / stored_filename
+
+    assert stored_path.exists()
+    assert stored_path.read_bytes() == pdf_bytes

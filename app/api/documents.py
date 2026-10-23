@@ -1,6 +1,6 @@
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
-
+from app.services.document_storage import save_pdf
 from app.services.pdf_extractor import extract_pdf_pages
 
 
@@ -30,8 +30,11 @@ async def extract_document(file: UploadFile = File(...)):
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
+    stored_filename = save_pdf(pdf_bytes)
+
     return {
         "filename": file.filename,
         "page_count": len(pages),
+        "stored_filename": stored_filename,
         "pages": pages,
     }
