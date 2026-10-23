@@ -98,3 +98,20 @@ def test_rejects_invalid_pdf_upload():
 
     assert response.status_code == 400
     assert "valid PDF" in response.json()["detail"]
+
+def test_rejects_empty_pdf_upload():
+    client = TestClient(app)
+
+    response = client.post(
+        "/documents/extract",
+        files={
+            "file": (
+                "empty.pdf",
+                b"",
+                "application/pdf",
+            )
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "The uploaded PDF file is empty."

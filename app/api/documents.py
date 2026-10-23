@@ -19,6 +19,12 @@ async def extract_document(file: UploadFile = File(...)):
 
     pdf_bytes = await file.read()
 
+    if not pdf_bytes:
+        raise HTTPException(
+            status_code=400,
+            detail="The uploaded PDF file is empty.",
+        )
+
     try:
         pages = extract_pdf_pages(pdf_bytes)
     except ValueError as exc:
