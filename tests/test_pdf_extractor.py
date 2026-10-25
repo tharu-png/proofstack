@@ -2,6 +2,12 @@
 import fitz
 import pytest
 
+import uuid
+
+from sqlalchemy.orm import Session
+from app.database import engine
+from app.models import Document
+
 from app.services.pdf_extractor import extract_pdf_pages
 from fastapi.testclient import TestClient
 from app.main import app
@@ -143,3 +149,35 @@ def test_upload_pdf_saves_original_file():
 
     assert stored_path.exists()
     assert stored_path.read_bytes() == pdf_bytes
+
+    document_id = uuid.UUID(data["document_id"])
+
+    with Session(engine) as session:
+        saved_document = session.get(Document, document_id)
+
+        assert saved_document is not None
+        assert saved_document.original_filename == "storage_test.pdf"
+        assert saved_document.stored_filename == data["stored_filename"]
+        assert saved_document.page_count == 2
+        assert saved_document.uploaded_at is not None
+
+
+def test_list_documents():
+    client = TestClient(app)
+
+    response = client.get("/documents/")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert isinstance(data, list)
+
+    if data:
+        document = data[0]
+
+        assert "document_id" in document
+        assert "filename" in document
+        assert "stored_filename" in document
+        assert "page_count" in document
+        assert "uploaded_at" in document

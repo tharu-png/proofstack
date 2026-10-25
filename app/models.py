@@ -1,0 +1,32 @@
+
+import uuid
+
+from sqlalchemy import DateTime, Integer, Text, func
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+class Document(Base):
+    __tablename__ = "documents"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+    original_filename: Mapped[str] = mapped_column(Text, nullable=False)
+    stored_filename: Mapped[str] = mapped_column(
+        Text,
+        unique=True,
+        nullable=False,
+    )
+    page_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    uploaded_at: Mapped[DateTime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )

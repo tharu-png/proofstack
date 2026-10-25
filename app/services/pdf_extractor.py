@@ -3,6 +3,7 @@ import fitz
 from typing import Dict, List, Union
 
 
+
 def extract_pdf_pages(pdf_bytes: bytes) -> List[Dict[str, Union[int, str]]]:
     """Extract text from a PDF while preserving page numbers."""
 

@@ -1,5 +1,10 @@
 
+
 from fastapi import APIRouter, File, HTTPException, UploadFile
+from sqlalchemy.orm import Session
+
+from app.database import engine
+from app.models import Document
 from app.services.document_storage import save_pdf
 from app.services.pdf_extractor import extract_pdf_pages
 
@@ -9,7 +14,7 @@ router = APIRouter(prefix="/documents", tags=["Documents"])
 
 @router.post("/extract")
 async def extract_document(file: UploadFile = File(...)):
-    """Upload a PDF and return its extracted page text."""
+    """Upload a PDF, extract its text, and save its metadata."""
 
     if file.content_type != "application/pdf":
         raise HTTPException(
@@ -32,9 +37,45 @@ async def extract_document(file: UploadFile = File(...)):
 
     stored_filename = save_pdf(pdf_bytes)
 
+    with Session(engine) as session:
+        document = Document(
+            original_filename=file.filename or "unnamed.pdf",
+            stored_filename=stored_filename,
+            page_count=len(pages),
+        )
+
+        session.add(document)
+        session.commit()
+        session.refresh(document)
+
+        document_id = str(document.id)
+        uploaded_at = document.uploaded_at.isoformat()
+
     return {
+        "document_id": document_id,
         "filename": file.filename,
         "page_count": len(pages),
         "stored_filename": stored_filename,
+        "uploaded_at": uploaded_at,
         "pages": pages,
     }
+
+@router.get("/")
+def list_documents():
+    """Return all documents saved in the database."""
+
+    with Session(engine) as session:
+        documents = session.query(Document).order_by(
+            Document.uploaded_at.desc()
+        ).all()
+
+        return [
+            {
+                "document_id": str(document.id),
+                "filename": document.original_filename,
+                "stored_filename": document.stored_filename,
+                "page_count": document.page_count,
+                "uploaded_at": document.uploaded_at.isoformat(),
+            }
+            for document in documents
+        ]
