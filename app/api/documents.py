@@ -1,13 +1,12 @@
 
-
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from app.database import engine
-from app.models import Document, DocumentPage
+from app.models import Document, DocumentChunk, DocumentPage
 from app.services.document_storage import save_pdf
 from app.services.pdf_extractor import extract_pdf_pages
-
+from app.services.chunking import chunk_text
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
@@ -33,7 +32,10 @@ async def extract_document(file: UploadFile = File(...)):
     try:
         pages = extract_pdf_pages(pdf_bytes)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        )
 
     stored_filename = save_pdf(pdf_bytes)
 
@@ -55,11 +57,23 @@ async def extract_document(file: UploadFile = File(...)):
             )
             session.add(document_page)
 
+            chunks = chunk_text(page["text"])
+
+            for chunk in chunks:
+                document_chunk = DocumentChunk(
+                    document_id=document.id,
+                    page_number=page["page_number"],
+                    chunk_index=chunk["chunk_index"],
+                    text=chunk["text"],
+                )
+                session.add(document_chunk)
+
         session.commit()
         session.refresh(document)
 
-    document_id = str(document.id)
-    uploaded_at = document.uploaded_at.isoformat()
+        document_id = str(document.id)
+        uploaded_at = document.uploaded_at.isoformat()
+
     return {
         "document_id": document_id,
         "filename": file.filename,
@@ -69,14 +83,17 @@ async def extract_document(file: UploadFile = File(...)):
         "pages": pages,
     }
 
+
 @router.get("/")
 def list_documents():
     """Return all documents saved in the database."""
 
     with Session(engine) as session:
-        documents = session.query(Document).order_by(
-            Document.uploaded_at.desc()
-        ).all()
+        documents = (
+            session.query(Document)
+            .order_by(Document.uploaded_at.desc())
+            .all()
+        )
 
         return [
             {
@@ -89,9 +106,11 @@ def list_documents():
             for document in documents
         ]
 
+
 @router.get("/{document_id}/pages")
 def get_document_pages(document_id: str):
     """Return the extracted text for each page of a document."""
+
     with Session(engine) as session:
         document = session.get(Document, document_id)
 
