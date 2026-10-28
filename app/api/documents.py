@@ -4,7 +4,7 @@ from fastapi import APIRouter, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from app.database import engine
-from app.models import Document
+from app.models import Document, DocumentPage
 from app.services.document_storage import save_pdf
 from app.services.pdf_extractor import extract_pdf_pages
 
@@ -45,12 +45,21 @@ async def extract_document(file: UploadFile = File(...)):
         )
 
         session.add(document)
+        session.flush()
+
+        for page in pages:
+            document_page = DocumentPage(
+                document_id=document.id,
+                page_number=page["page_number"],
+                text=page["text"],
+            )
+            session.add(document_page)
+
         session.commit()
         session.refresh(document)
 
-        document_id = str(document.id)
-        uploaded_at = document.uploaded_at.isoformat()
-
+    document_id = str(document.id)
+    uploaded_at = document.uploaded_at.isoformat()
     return {
         "document_id": document_id,
         "filename": file.filename,
@@ -78,4 +87,31 @@ def list_documents():
                 "uploaded_at": document.uploaded_at.isoformat(),
             }
             for document in documents
+        ]
+
+@router.get("/{document_id}/pages")
+def get_document_pages(document_id: str):
+    """Return the extracted text for each page of a document."""
+    with Session(engine) as session:
+        document = session.get(Document, document_id)
+
+        if document is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Document not found.",
+            )
+
+        pages = (
+            session.query(DocumentPage)
+            .filter(DocumentPage.document_id == document.id)
+            .order_by(DocumentPage.page_number)
+            .all()
+        )
+
+        return [
+            {
+                "page_number": page.page_number,
+                "text": page.text,
+            }
+            for page in pages
         ]

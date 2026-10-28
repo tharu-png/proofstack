@@ -181,3 +181,54 @@ def test_list_documents():
         assert "stored_filename" in document
         assert "page_count" in document
         assert "uploaded_at" in document
+
+
+def test_get_document_pages_not_found():
+    client = TestClient(app)
+
+    response = client.get(
+        "/documents/00000000-0000-0000-0000-000000000000/pages"
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Document not found."
+
+
+
+
+def test_get_document_pages_returns_saved_text():
+    client = TestClient(app)
+
+    # Create a PDF containing two known pages.
+    pdf_bytes = create_test_pdf()
+
+    # Upload the PDF through the API.
+    upload_response = client.post(
+        "/documents/extract",
+        files={
+            "file": (
+                "retrieval_test.pdf",
+                pdf_bytes,
+                "application/pdf",
+            )
+        },
+    )
+
+    assert upload_response.status_code == 200
+
+    document_id = upload_response.json()["document_id"]
+
+    # Retrieve the saved page text.
+    response = client.get(
+        "/documents/{}/pages".format(document_id)
+    )
+
+    assert response.status_code == 200
+
+    pages = response.json()
+
+    assert len(pages) == 2
+    assert pages[0]["page_number"] == 1
+    assert pages[0]["text"] == "ProofStack evidence on page one."
+    assert pages[1]["page_number"] == 2
+    assert pages[1]["text"] == "ProofStack evidence on page two."

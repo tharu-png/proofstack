@@ -1,7 +1,7 @@
 
 import uuid
 
-from sqlalchemy import DateTime, Integer, Text, func
+from sqlalchemy import DateTime, ForeignKey, Integer, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -28,5 +28,30 @@ class Document(Base):
     uploaded_at: Mapped[DateTime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
+        nullable=False,
+    )
+
+class DocumentPage(Base):
+    __tablename__ = "document_pages"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("documents.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    page_number: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+
+    text: Mapped[str] = mapped_column(
+        Text,
         nullable=False,
     )
